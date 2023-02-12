@@ -41,6 +41,7 @@ class EulerDiscreteSchedulerOutput(BaseOutput):
             `pred_original_sample` can be used to preview progress or for guidance.
     """
 
+    sample: torch.FloatTensor
     prev_sample: torch.FloatTensor
     pred_original_sample: Optional[torch.FloatTensor] = None
 
@@ -131,6 +132,7 @@ class EulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
         """
         if isinstance(timestep, torch.Tensor):
             timestep = timestep.to(self.timesteps.device)
+
         step_index = (self.timesteps == timestep).nonzero().item()
         sigma = self.sigmas[step_index]
 
@@ -166,6 +168,7 @@ class EulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
 
         sigmas = np.concatenate([sigmas, [0.0]]).astype(np.float32)
         self.sigmas = torch.from_numpy(sigmas).to(device=device)
+
         if str(device).startswith("mps"):
             # mps does not support float64
             self.timesteps = torch.from_numpy(timesteps).to(device, dtype=torch.float32)
@@ -267,7 +270,7 @@ class EulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
         if not return_dict:
             return (prev_sample,)
 
-        return EulerDiscreteSchedulerOutput(prev_sample=prev_sample, pred_original_sample=pred_original_sample)
+        return EulerDiscreteSchedulerOutput(sample=sample, prev_sample=prev_sample, pred_original_sample=pred_original_sample)
 
     def add_noise(
         self,

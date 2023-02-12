@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import List, Optional, Union
 
+import torch
 import numpy as np
 import PIL
 from PIL import Image
@@ -34,7 +35,7 @@ class StableDiffusionPipelineOutput(BaseOutput):
 
     images: Union[List[PIL.Image.Image], np.ndarray]
     nsfw_content_detected: Optional[List[bool]]
-
+    final_latents: Optional[torch.FloatTensor]
 
 if is_transformers_available() and is_torch_available():
     from .pipeline_cycle_diffusion import CycleDiffusionPipeline
