@@ -1,4 +1,4 @@
-# Copyright 2022 The HuggingFace Team. All rights reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,3 +17,13 @@
 # It only exists so that temporarely `from diffusers.pipelines import DiffusionPipeline` works
 
 from .pipelines import DiffusionPipeline, ImagePipelineOutput  # noqa: F401
+from .utils import deprecate
+
+
+deprecate(
+    "pipelines_utils",
+    "0.22.0",
+    "Importing `DiffusionPipeline` or `ImagePipelineOutput` from diffusers.pipeline_utils is deprecated. Please import from diffusers.pipelines.pipeline_utils instead.",
+    standard_warn=False,
+    stacklevel=3,
+)

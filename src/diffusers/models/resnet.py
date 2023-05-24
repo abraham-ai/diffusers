@@ -1,3 +1,18 @@
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+# `TemporalConvLayer` Copyright 2023 Alibaba DAMO-VILAB, The ModelScope Team and The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from functools import partial
 from typing import Optional
 
@@ -9,14 +24,17 @@ from .attention import AdaGroupNorm
 
 
 class Upsample1D(nn.Module):
-    """
-    An upsampling layer with an optional convolution.
+    """A 1D upsampling layer with an optional convolution.
 
     Parameters:
-            channels: channels in the inputs and outputs.
-            use_conv: a bool determining if a convolution is applied.
-            use_conv_transpose:
-            out_channels:
+        channels (`int`):
+            number of channels in the inputs and outputs.
+        use_conv (`bool`, default `False`):
+            option to use a convolution.
+        use_conv_transpose (`bool`, default `False`):
+            option to use a convolution transpose.
+        out_channels (`int`, optional):
+            number of output channels. Defaults to `channels`.
     """
 
     def __init__(self, channels, use_conv=False, use_conv_transpose=False, out_channels=None, name="conv"):
@@ -47,14 +65,17 @@ class Upsample1D(nn.Module):
 
 
 class Downsample1D(nn.Module):
-    """
-    A downsampling layer with an optional convolution.
+    """A 1D downsampling layer with an optional convolution.
 
     Parameters:
-        channels: channels in the inputs and outputs.
-        use_conv: a bool determining if a convolution is applied.
-        out_channels:
-        padding:
+        channels (`int`):
+            number of channels in the inputs and outputs.
+        use_conv (`bool`, default `False`):
+            option to use a convolution.
+        out_channels (`int`, optional):
+            number of output channels. Defaults to `channels`.
+        padding (`int`, default `1`):
+            padding for the convolution.
     """
 
     def __init__(self, channels, use_conv=False, out_channels=None, padding=1, name="conv"):
@@ -78,14 +99,17 @@ class Downsample1D(nn.Module):
 
 
 class Upsample2D(nn.Module):
-    """
-    An upsampling layer with an optional convolution.
+    """A 2D upsampling layer with an optional convolution.
 
     Parameters:
-        channels: channels in the inputs and outputs.
-        use_conv: a bool determining if a convolution is applied.
-        use_conv_transpose:
-        out_channels:
+        channels (`int`):
+            number of channels in the inputs and outputs.
+        use_conv (`bool`, default `False`):
+            option to use a convolution.
+        use_conv_transpose (`bool`, default `False`):
+            option to use a convolution transpose.
+        out_channels (`int`, optional):
+            number of output channels. Defaults to `channels`.
     """
 
     def __init__(self, channels, use_conv=False, use_conv_transpose=False, out_channels=None, name="conv"):
@@ -147,14 +171,17 @@ class Upsample2D(nn.Module):
 
 
 class Downsample2D(nn.Module):
-    """
-    A downsampling layer with an optional convolution.
+    """A 2D downsampling layer with an optional convolution.
 
     Parameters:
-        channels: channels in the inputs and outputs.
-        use_conv: a bool determining if a convolution is applied.
-        out_channels:
-        padding:
+        channels (`int`):
+            number of channels in the inputs and outputs.
+        use_conv (`bool`, default `False`):
+            option to use a convolution.
+        out_channels (`int`, optional):
+            number of output channels. Defaults to `channels`.
+        padding (`int`, default `1`):
+            padding for the convolution.
     """
 
     def __init__(self, channels, use_conv=False, out_channels=None, padding=1, name="conv"):
@@ -194,6 +221,19 @@ class Downsample2D(nn.Module):
 
 
 class FirUpsample2D(nn.Module):
+    """A 2D FIR upsampling layer with an optional convolution.
+
+    Parameters:
+        channels (`int`):
+            number of channels in the inputs and outputs.
+        use_conv (`bool`, default `False`):
+            option to use a convolution.
+        out_channels (`int`, optional):
+            number of output channels. Defaults to `channels`.
+        fir_kernel (`tuple`, default `(1, 3, 3, 1)`):
+            kernel for the FIR filter.
+    """
+
     def __init__(self, channels=None, out_channels=None, use_conv=False, fir_kernel=(1, 3, 3, 1)):
         super().__init__()
         out_channels = out_channels if out_channels else channels
@@ -294,6 +334,19 @@ class FirUpsample2D(nn.Module):
 
 
 class FirDownsample2D(nn.Module):
+    """A 2D FIR downsampling layer with an optional convolution.
+
+    Parameters:
+        channels (`int`):
+            number of channels in the inputs and outputs.
+        use_conv (`bool`, default `False`):
+            option to use a convolution.
+        out_channels (`int`, optional):
+            number of output channels. Defaults to `channels`.
+        fir_kernel (`tuple`, default `(1, 3, 3, 1)`):
+            kernel for the FIR filter.
+    """
+
     def __init__(self, channels=None, out_channels=None, use_conv=False, fir_kernel=(1, 3, 3, 1)):
         super().__init__()
         out_channels = out_channels if out_channels else channels
@@ -380,7 +433,8 @@ class KDownsample2D(nn.Module):
         x = F.pad(x, (self.pad,) * 4, self.pad_mode)
         weight = x.new_zeros([x.shape[1], x.shape[1], self.kernel.shape[0], self.kernel.shape[1]])
         indices = torch.arange(x.shape[1], device=x.device)
-        weight[indices, indices] = self.kernel.to(weight)
+        kernel = self.kernel.to(weight)[None, :].expand(x.shape[1], -1, -1)
+        weight[indices, indices] = kernel
         return F.conv2d(x, weight, stride=2)
 
 
@@ -396,7 +450,8 @@ class KUpsample2D(nn.Module):
         x = F.pad(x, ((self.pad + 1) // 2,) * 4, self.pad_mode)
         weight = x.new_zeros([x.shape[1], x.shape[1], self.kernel.shape[0], self.kernel.shape[1]])
         indices = torch.arange(x.shape[1], device=x.device)
-        weight[indices, indices] = self.kernel.to(weight)
+        kernel = self.kernel.to(weight)[None, :].expand(x.shape[1], -1, -1)
+        weight[indices, indices] = kernel
         return F.conv_transpose2d(x, weight, stride=2, padding=self.pad * 2 + 1)
 
 
@@ -418,7 +473,7 @@ class ResnetBlock2D(nn.Module):
         time_embedding_norm (`str`, *optional*, default to `"default"` ): Time scale shift config.
             By default, apply timestep embedding conditioning with a simple shift mechanism. Choose "scale_shift" or
             "ada_group" for a stronger conditioning with scale and shift.
-        kernal (`torch.FloatTensor`, optional, default to None): FIR filter, see
+        kernel (`torch.FloatTensor`, optional, default to None): FIR filter, see
             [`~models.resnet.FirUpsample2D`] and [`~models.resnet.FirDownsample2D`].
         output_scale_factor (`float`, *optional*, default to be `1.0`): the scale factor to use for the output.
         use_in_shortcut (`bool`, *optional*, default to `True`):
@@ -444,6 +499,7 @@ class ResnetBlock2D(nn.Module):
         pre_norm=True,
         eps=1e-6,
         non_linearity="swish",
+        skip_time_act=False,
         time_embedding_norm="default",  # default, scale_shift, ada_group
         kernel=None,
         output_scale_factor=1.0,
@@ -464,6 +520,7 @@ class ResnetBlock2D(nn.Module):
         self.down = down
         self.output_scale_factor = output_scale_factor
         self.time_embedding_norm = time_embedding_norm
+        self.skip_time_act = skip_time_act
 
         if groups_out is None:
             groups_out = groups
@@ -555,7 +612,9 @@ class ResnetBlock2D(nn.Module):
         hidden_states = self.conv1(hidden_states)
 
         if self.time_emb_proj is not None:
-            temb = self.time_emb_proj(self.nonlinearity(temb))[:, :, None, None]
+            if not self.skip_time_act:
+                temb = self.nonlinearity(temb)
+            temb = self.time_emb_proj(temb)[:, :, None, None]
 
         if temb is not None and self.time_embedding_norm == "default":
             hidden_states = hidden_states + temb
@@ -764,3 +823,61 @@ def upfirdn2d_native(tensor, kernel, up=1, down=1, pad=(0, 0)):
     out_w = (in_w * up_x + pad_x0 + pad_x1 - kernel_w) // down_x + 1
 
     return out.view(-1, channel, out_h, out_w)
+
+
+class TemporalConvLayer(nn.Module):
+    """
+    Temporal convolutional layer that can be used for video (sequence of images) input Code mostly copied from:
+    https://github.com/modelscope/modelscope/blob/1509fdb973e5871f37148a4b5e5964cafd43e64d/modelscope/models/multi_modal/video_synthesis/unet_sd.py#L1016
+    """
+
+    def __init__(self, in_dim, out_dim=None, dropout=0.0):
+        super().__init__()
+        out_dim = out_dim or in_dim
+        self.in_dim = in_dim
+        self.out_dim = out_dim
+
+        # conv layers
+        self.conv1 = nn.Sequential(
+            nn.GroupNorm(32, in_dim), nn.SiLU(), nn.Conv3d(in_dim, out_dim, (3, 1, 1), padding=(1, 0, 0))
+        )
+        self.conv2 = nn.Sequential(
+            nn.GroupNorm(32, out_dim),
+            nn.SiLU(),
+            nn.Dropout(dropout),
+            nn.Conv3d(out_dim, in_dim, (3, 1, 1), padding=(1, 0, 0)),
+        )
+        self.conv3 = nn.Sequential(
+            nn.GroupNorm(32, out_dim),
+            nn.SiLU(),
+            nn.Dropout(dropout),
+            nn.Conv3d(out_dim, in_dim, (3, 1, 1), padding=(1, 0, 0)),
+        )
+        self.conv4 = nn.Sequential(
+            nn.GroupNorm(32, out_dim),
+            nn.SiLU(),
+            nn.Dropout(dropout),
+            nn.Conv3d(out_dim, in_dim, (3, 1, 1), padding=(1, 0, 0)),
+        )
+
+        # zero out the last layer params,so the conv block is identity
+        nn.init.zeros_(self.conv4[-1].weight)
+        nn.init.zeros_(self.conv4[-1].bias)
+
+    def forward(self, hidden_states, num_frames=1):
+        hidden_states = (
+            hidden_states[None, :].reshape((-1, num_frames) + hidden_states.shape[1:]).permute(0, 2, 1, 3, 4)
+        )
+
+        identity = hidden_states
+        hidden_states = self.conv1(hidden_states)
+        hidden_states = self.conv2(hidden_states)
+        hidden_states = self.conv3(hidden_states)
+        hidden_states = self.conv4(hidden_states)
+
+        hidden_states = identity + hidden_states
+
+        hidden_states = hidden_states.permute(0, 2, 1, 3, 4).reshape(
+            (hidden_states.shape[0] * hidden_states.shape[2], -1) + hidden_states.shape[3:]
+        )
+        return hidden_states

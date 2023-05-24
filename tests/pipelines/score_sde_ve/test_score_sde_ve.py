@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 HuggingFace Inc.
+# Copyright 2023 HuggingFace Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,10 +19,10 @@ import numpy as np
 import torch
 
 from diffusers import ScoreSdeVePipeline, ScoreSdeVeScheduler, UNet2DModel
-from diffusers.utils.testing_utils import require_torch, slow, torch_device
+from diffusers.utils.testing_utils import enable_full_determinism, require_torch, slow, torch_device
 
 
-torch.backends.cuda.matmul.allow_tf32 = False
+enable_full_determinism()
 
 
 class ScoreSdeVeipelineFastTests(unittest.TestCase):

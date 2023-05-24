@@ -51,6 +51,7 @@ else:
     from .pipeline_stable_diffusion_inpaint_legacy import StableDiffusionInpaintPipelineLegacy
     from .pipeline_stable_diffusion_instruct_pix2pix import StableDiffusionInstructPix2PixPipeline
     from .pipeline_stable_diffusion_latent_upscale import StableDiffusionLatentUpscalePipeline
+    from .pipeline_stable_diffusion_model_editing import StableDiffusionModelEditingPipeline
     from .pipeline_stable_diffusion_panorama import StableDiffusionPanoramaPipeline
     from .pipeline_stable_diffusion_sag import StableDiffusionSAGPipeline
     from .pipeline_stable_diffusion_upscale import StableDiffusionUpscalePipeline
@@ -74,10 +75,12 @@ try:
 except OptionalDependencyNotAvailable:
     from ...utils.dummy_torch_and_transformers_objects import (
         StableDiffusionDepth2ImgPipeline,
+        StableDiffusionDiffEditPipeline,
         StableDiffusionPix2PixZeroPipeline,
     )
 else:
     from .pipeline_stable_diffusion_depth2img import StableDiffusionDepth2ImgPipeline
+    from .pipeline_stable_diffusion_diffedit import StableDiffusionDiffEditPipeline
     from .pipeline_stable_diffusion_pix2pix_zero import StableDiffusionPix2PixZeroPipeline
 
 
@@ -104,6 +107,7 @@ else:
     from .pipeline_onnx_stable_diffusion_img2img import OnnxStableDiffusionImg2ImgPipeline
     from .pipeline_onnx_stable_diffusion_inpaint import OnnxStableDiffusionInpaintPipeline
     from .pipeline_onnx_stable_diffusion_inpaint_legacy import OnnxStableDiffusionInpaintPipelineLegacy
+    from .pipeline_onnx_stable_diffusion_upscale import OnnxStableDiffusionUpscalePipeline
 
 if is_transformers_available() and is_flax_available():
     import flax

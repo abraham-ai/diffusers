@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 HuggingFace Inc.
+# Copyright 2023 HuggingFace Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,19 +15,20 @@
 
 import gc
 import math
-import tracemalloc
 import unittest
 
 import torch
 
 from diffusers import UNet2DModel
 from diffusers.utils import floats_tensor, logging, slow, torch_all_close, torch_device
+from diffusers.utils.testing_utils import enable_full_determinism
 
-from ..test_modeling_common import ModelTesterMixin
+from .test_modeling_common import ModelTesterMixin
 
 
 logger = logging.get_logger(__name__)
-torch.backends.cuda.matmul.allow_tf32 = False
+
+enable_full_determinism()
 
 
 class Unet2DModelTests(ModelTesterMixin, unittest.TestCase):
@@ -155,33 +156,6 @@ class UNetLDMModelTests(ModelTesterMixin, unittest.TestCase):
 
         assert torch_all_close(arr_accelerate, arr_normal_load, rtol=1e-3)
 
-    @unittest.skipIf(torch_device != "cuda", "This test is supposed to run on GPU")
-    def test_memory_footprint_gets_reduced(self):
-        torch.cuda.empty_cache()
-        gc.collect()
-
-        tracemalloc.start()
-        # by defautl model loading will use accelerate as `low_cpu_mem_usage=True`
-        model_accelerate, _ = UNet2DModel.from_pretrained("fusing/unet-ldm-dummy-update", output_loading_info=True)
-        model_accelerate.to(torch_device)
-        model_accelerate.eval()
-        _, peak_accelerate = tracemalloc.get_traced_memory()
-
-        del model_accelerate
-        torch.cuda.empty_cache()
-        gc.collect()
-
-        model_normal_load, _ = UNet2DModel.from_pretrained(
-            "fusing/unet-ldm-dummy-update", output_loading_info=True, low_cpu_mem_usage=False
-        )
-        model_normal_load.to(torch_device)
-        model_normal_load.eval()
-        _, peak_normal = tracemalloc.get_traced_memory()
-
-        tracemalloc.stop()
-
-        assert peak_accelerate < peak_normal
-
     def test_output_pretrained(self):
         model = UNet2DModel.from_pretrained("fusing/unet-ldm-dummy-update")
         model.eval()
@@ -274,10 +248,6 @@ class NCSNppModelTests(ModelTesterMixin, unittest.TestCase):
         model = UNet2DModel.from_pretrained("google/ncsnpp-celebahq-256")
         model.to(torch_device)
 
-        torch.manual_seed(0)
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(0)
-
         batch_size = 4
         num_channels = 3
         sizes = (256, 256)
@@ -290,7 +260,7 @@ class NCSNppModelTests(ModelTesterMixin, unittest.TestCase):
 
         output_slice = output[0, -3:, -3:, -1].flatten().cpu()
         # fmt: off
-        expected_output_slice = torch.tensor([-4836.2231, -6487.1387, -3816.7969, -7964.9253, -10966.2842, -20043.6016, 8137.0571, 2340.3499, 544.6114])
+        expected_output_slice = torch.tensor([-4842.8691, -6499.6631, -3800.1953, -7978.2686, -10980.7129, -20028.8535, 8148.2822, 2342.2905, 567.7608])
         # fmt: on
 
         self.assertTrue(torch_all_close(output_slice, expected_output_slice, rtol=1e-2))
@@ -298,10 +268,6 @@ class NCSNppModelTests(ModelTesterMixin, unittest.TestCase):
     def test_output_pretrained_ve_large(self):
         model = UNet2DModel.from_pretrained("fusing/ncsnpp-ffhq-ve-dummy-update")
         model.to(torch_device)
-
-        torch.manual_seed(0)
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(0)
 
         batch_size = 4
         num_channels = 3

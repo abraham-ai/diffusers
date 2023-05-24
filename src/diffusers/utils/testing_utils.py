@@ -1,14 +1,16 @@
 import inspect
 import logging
+import multiprocessing
 import os
 import random
 import re
+import tempfile
 import unittest
 import urllib.parse
 from distutils.util import strtobool
 from io import BytesIO, StringIO
 from pathlib import Path
-from typing import Optional, Union
+from typing import List, Optional, Union
 
 import numpy as np
 import PIL.Image
@@ -16,7 +18,17 @@ import PIL.ImageOps
 import requests
 from packaging import version
 
-from .import_utils import is_flax_available, is_onnx_available, is_torch_available
+from .import_utils import (
+    BACKENDS_MAPPING,
+    is_compel_available,
+    is_flax_available,
+    is_note_seq_available,
+    is_onnx_available,
+    is_opencv_available,
+    is_torch_available,
+    is_torch_version,
+    is_torchsde_available,
+)
 from .logging import get_logger
 
 
@@ -156,6 +168,15 @@ def require_torch(test_case):
     return unittest.skipUnless(is_torch_available(), "test requires PyTorch")(test_case)
 
 
+def require_torch_2(test_case):
+    """
+    Decorator marking a test that requires PyTorch 2. These tests are skipped when it isn't installed.
+    """
+    return unittest.skipUnless(is_torch_available() and is_torch_version(">=", "2.0.0"), "test requires PyTorch 2")(
+        test_case
+    )
+
+
 def require_torch_gpu(test_case):
     """Decorator marking a test that requires CUDA and PyTorch."""
     return unittest.skipUnless(is_torch_available() and torch_device == "cuda", "test requires PyTorch+CUDA")(
@@ -175,11 +196,33 @@ def require_flax(test_case):
     return unittest.skipUnless(is_flax_available(), "test requires JAX & Flax")(test_case)
 
 
+def require_compel(test_case):
+    """
+    Decorator marking a test that requires compel: https://github.com/damian0815/compel. These tests are skipped when
+    the library is not installed.
+    """
+    return unittest.skipUnless(is_compel_available(), "test requires compel")(test_case)
+
+
 def require_onnxruntime(test_case):
     """
     Decorator marking a test that requires onnxruntime. These tests are skipped when onnxruntime isn't installed.
     """
     return unittest.skipUnless(is_onnx_available(), "test requires onnxruntime")(test_case)
+
+
+def require_note_seq(test_case):
+    """
+    Decorator marking a test that requires note_seq. These tests are skipped when note_seq isn't installed.
+    """
+    return unittest.skipUnless(is_note_seq_available(), "test requires note_seq")(test_case)
+
+
+def require_torchsde(test_case):
+    """
+    Decorator marking a test that requires torchsde. These tests are skipped when torchsde isn't installed.
+    """
+    return unittest.skipUnless(is_torchsde_available(), "test requires torchsde")(test_case)
 
 
 def load_numpy(arry: Union[str, np.ndarray], local_path: Optional[str] = None) -> np.ndarray:
@@ -206,6 +249,13 @@ def load_numpy(arry: Union[str, np.ndarray], local_path: Optional[str] = None) -
             " ndarray."
         )
 
+    return arry
+
+
+def load_pt(url: str):
+    response = requests.get(url)
+    response.raise_for_status()
+    arry = torch.load(BytesIO(response.content))
     return arry
 
 
@@ -236,6 +286,33 @@ def load_image(image: Union[str, PIL.Image.Image]) -> PIL.Image.Image:
     image = PIL.ImageOps.exif_transpose(image)
     image = image.convert("RGB")
     return image
+
+
+def preprocess_image(image: PIL.Image, batch_size: int):
+    w, h = image.size
+    w, h = (x - x % 8 for x in (w, h))  # resize to integer multiple of 8
+    image = image.resize((w, h), resample=PIL.Image.LANCZOS)
+    image = np.array(image).astype(np.float32) / 255.0
+    image = np.vstack([image[None].transpose(0, 3, 1, 2)] * batch_size)
+    image = torch.from_numpy(image)
+    return 2.0 * image - 1.0
+
+
+def export_to_video(video_frames: List[np.ndarray], output_video_path: str = None) -> str:
+    if is_opencv_available():
+        import cv2
+    else:
+        raise ImportError(BACKENDS_MAPPING["opencv"][1].format("export_to_video"))
+    if output_video_path is None:
+        output_video_path = tempfile.NamedTemporaryFile(suffix=".mp4").name
+
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    h, w, c = video_frames[0].shape
+    video_writer = cv2.VideoWriter(output_video_path, fourcc, fps=8, frameSize=(w, h))
+    for i in range(len(video_frames)):
+        img = cv2.cvtColor(video_frames[i], cv2.COLOR_RGB2BGR)
+        video_writer.write(img)
+    return output_video_path
 
 
 def load_hf_numpy(path) -> np.ndarray:
@@ -401,6 +478,50 @@ def pytest_terminal_summary_main(tr, id):
     config.option.tbstyle = orig_tbstyle
 
 
+# Taken from: https://github.com/huggingface/transformers/blob/3658488ff77ff8d45101293e749263acf437f4d5/src/transformers/testing_utils.py#L1787
+def run_test_in_subprocess(test_case, target_func, inputs=None, timeout=None):
+    """
+    To run a test in a subprocess. In particular, this can avoid (GPU) memory issue.
+
+    Args:
+        test_case (`unittest.TestCase`):
+            The test that will run `target_func`.
+        target_func (`Callable`):
+            The function implementing the actual testing logic.
+        inputs (`dict`, *optional*, defaults to `None`):
+            The inputs that will be passed to `target_func` through an (input) queue.
+        timeout (`int`, *optional*, defaults to `None`):
+            The timeout (in seconds) that will be passed to the input and output queues. If not specified, the env.
+            variable `PYTEST_TIMEOUT` will be checked. If still `None`, its value will be set to `600`.
+    """
+    if timeout is None:
+        timeout = int(os.environ.get("PYTEST_TIMEOUT", 600))
+
+    start_methohd = "spawn"
+    ctx = multiprocessing.get_context(start_methohd)
+
+    input_queue = ctx.Queue(1)
+    output_queue = ctx.JoinableQueue(1)
+
+    # We can't send `unittest.TestCase` to the child, otherwise we get issues regarding pickle.
+    input_queue.put(inputs, timeout=timeout)
+
+    process = ctx.Process(target=target_func, args=(input_queue, output_queue, timeout))
+    process.start()
+    # Kill the child process if we can't get outputs from it in time: otherwise, the hanging subprocess prevents
+    # the test to exit properly.
+    try:
+        results = output_queue.get(timeout=timeout)
+        output_queue.task_done()
+    except Exception as e:
+        process.terminate()
+        test_case.fail(e)
+    process.join(timeout=timeout)
+
+    if results["error"] is not None:
+        test_case.fail(f'{results["error"]}')
+
+
 class CaptureLogger:
     """
     Args:
@@ -438,3 +559,21 @@ class CaptureLogger:
 
     def __repr__(self):
         return f"captured: {self.out}\n"
+
+
+def enable_full_determinism():
+    """
+    Helper function for reproducible behavior during distributed training. See
+    - https://pytorch.org/docs/stable/notes/randomness.html for pytorch
+    """
+    #  Enable PyTorch deterministic mode. This potentially requires either the environment
+    #  variable 'CUDA_LAUNCH_BLOCKING' or 'CUBLAS_WORKSPACE_CONFIG' to be set,
+    # depending on the CUDA version, so we set them both here
+    os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
+    torch.use_deterministic_algorithms(True)
+
+    # Enable CUDNN deterministic mode
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cuda.matmul.allow_tf32 = False

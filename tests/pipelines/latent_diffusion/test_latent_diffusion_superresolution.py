@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 HuggingFace Inc.
+# Copyright 2023 HuggingFace Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,10 +21,10 @@ import torch
 
 from diffusers import DDIMScheduler, LDMSuperResolutionPipeline, UNet2DModel, VQModel
 from diffusers.utils import PIL_INTERPOLATION, floats_tensor, load_image, slow, torch_device
-from diffusers.utils.testing_utils import require_torch
+from diffusers.utils.testing_utils import enable_full_determinism, require_torch
 
 
-torch.backends.cuda.matmul.allow_tf32 = False
+enable_full_determinism()
 
 
 class LDMSuperResolutionPipelineFastTests(unittest.TestCase):
@@ -118,7 +118,6 @@ class LDMSuperResolutionPipelineIntegrationTests(unittest.TestCase):
         init_image = init_image.resize((64, 64), resample=PIL_INTERPOLATION["lanczos"])
 
         ldm = LDMSuperResolutionPipeline.from_pretrained("duongna/ldm-super-resolution", device_map="auto")
-        ldm.to(torch_device)
         ldm.set_progress_bar_config(disable=None)
 
         generator = torch.manual_seed(0)

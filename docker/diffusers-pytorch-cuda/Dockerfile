@@ -26,8 +26,7 @@ RUN python3 -m pip install --no-cache-dir --upgrade pip && \
     python3 -m pip install --no-cache-dir \
         torch \
         torchvision \
-        torchaudio \
-        --extra-index-url https://download.pytorch.org/whl/cu117 && \
+        torchaudio && \
     python3 -m pip install --no-cache-dir \
         accelerate \
         datasets \
@@ -38,6 +37,7 @@ RUN python3 -m pip install --no-cache-dir --upgrade pip && \
         numpy \
         scipy \
         tensorboard \
-        transformers
+        transformers \
+        omegaconf
 
 CMD ["/bin/bash"]
