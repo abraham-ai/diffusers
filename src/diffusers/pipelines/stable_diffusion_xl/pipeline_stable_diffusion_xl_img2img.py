@@ -953,7 +953,7 @@ class StableDiffusionXLImg2ImgPipeline(DiffusionPipeline, FromSingleFileMixin, L
 
         
         if callback is not None:
-            callback(i, t, latents, pre_timestep = 1)
+            callback(0, timesteps[0], latents, pre_timestep = 1)
 
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
