@@ -1,0 +1,1 @@
+cog predict -i lora_training_urls="https://storage.googleapis.com/public-assets-xander/Random/remove/banny/0.src.jpg|https://storage.googleapis.com/public-assets-xander/Random/remove/banny/5.src.jpg|https://storage.googleapis.com/public-assets-xander/Random/remove/banny/9.src.jpg" -i instance_prompt="a cartoon of Banny" -i name="Banny"

@@ -98,6 +98,10 @@ class Predictor(BasePredictor):
             description="Resolution",
             default=960
         ),
+        lr_flip_prob: float = Input(
+            description="LR flip prob",
+            default=0.5
+        ),
         train_batch_size: int = Input(
             description="Batch size",
             default=2
@@ -169,10 +173,11 @@ class Predictor(BasePredictor):
 
         args.rank = lora_rank
         args.resolution = resolution
+        args.lr_flip_prob = lr_flip_prob
         args.learning_rate = learning_rate
         args.train_batch_size = train_batch_size
         args.gradient_accumulation_steps = gradient_accumulation_steps
-        args.dataloader_num_workers = 2
+        args.dataloader_num_workers = 1
         args.sample_batch_size = 1
         args.max_train_steps = max_train_steps
         #args.train_text_encoder = True  #False by default if not provided
@@ -182,7 +187,7 @@ class Predictor(BasePredictor):
         args.checkpointing_steps = args.max_train_steps
         args.checkpoints_total_limit = 1
         args.seed = 0
-        args.report_to = "wandb"
+        args.report_to = "tensorboard"
         args.mixed_precision = "fp16"
 
         # Regularization (makes training run much slower):

@@ -432,6 +432,11 @@ def parse_args(input_args=None):
 
     return args
 
+from torchvision import transforms
+class IdentityTransform:
+    def __call__(self, x):
+        return x
+identity_transform = IdentityTransform()
 
 class DreamBoothDataset(Dataset):
     """
@@ -476,8 +481,8 @@ class DreamBoothDataset(Dataset):
             [
                 transforms.Resize(size, interpolation=transforms.InterpolationMode.BILINEAR),
                 transforms.CenterCrop(size) if center_crop else transforms.RandomCrop(size),
-                transforms.ColorJitter(0.1, 0.1) if color_jitter else transforms.Lambda(lambda x: x),
-                transforms.RandomHorizontalFlip(p=lr_flip_p) if lr_flip_p > 0.0 else transforms.Lambda(lambda x: x),
+                transforms.ColorJitter(0.1, 0.1) if color_jitter else identity_transform,
+                transforms.RandomHorizontalFlip(p=lr_flip_p) if lr_flip_p > 0.0 else identity_transform,
                 transforms.ToTensor(),
                 transforms.Normalize([0.5], [0.5]),
             ]
@@ -968,6 +973,7 @@ def main(args):
         instance_data_root=args.instance_data_dir,
         class_data_root=args.class_data_dir if args.with_prior_preservation else None,
         class_num=args.num_class_images,
+        lr_flip_p = args.lr_flip_p,
         size=args.resolution,
         center_crop=args.center_crop,
     )
