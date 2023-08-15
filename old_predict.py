@@ -257,15 +257,15 @@ class Predictor(BasePredictor):
 
 if __name__ == "__main__":
 
-    if 0:
-        instance_data_dir = "/data/xander/Projects/cog/lora/exps/training_imgs/hetty/sub_mini/imgs"
-        output_dir = "lora/trained_models/sdxl-lora-hettysubminifin768"
+    if 1:
+        instance_data_dir = "/data/xander/Projects/cog/lora/exps/training_imgs/hetty/sub2/imgs"
+        output_dir = "lora/trained_models/sdxl-lora-hetty_all_plzwork_sub2"
 
         instance_prompt   = 'a photo of Cate Blanchett'
         validation_prompt = 'a photo of Cate Blanchett as the commander of the starfleet enterprise'
 
         class_data_dir = output_dir + "_class_imgs"
-        class_prompt = "a photo of a man"
+        class_prompt = "a photo of a woman"
     else:
         instance_data_dir = "/data/xander/Projects/cog/xander_eden_stuff/xander/assets/chinaman/set2"
         output_dir = "lora/trained_models/sdxl-lora-chinaman"

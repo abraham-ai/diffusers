@@ -222,6 +222,14 @@ def parse_args(input_args=None):
         ),
     )
     parser.add_argument(
+        "--lr_flip_p",
+        type=float,
+        default=0.0,
+        help=(
+            "The probability of flipping the image horizontally. Used for data augmentation."
+        ),
+    )
+    parser.add_argument(
         "--crops_coords_top_left_h",
         type=int,
         default=0,
@@ -412,7 +420,7 @@ def parse_args(input_args=None):
     if input_args is not None:
         args = parser.parse_args(input_args)
     else:
-        args, _ = parser.parse_known_args([]) # Empty list to simulate no command line args
+        args = parser.parse_args()
 
     env_local_rank = int(os.environ.get("LOCAL_RANK", -1))
     if env_local_rank != -1 and env_local_rank != args.local_rank:
@@ -432,11 +440,6 @@ def parse_args(input_args=None):
 
     return args
 
-from torchvision import transforms
-class IdentityTransform:
-    def __call__(self, x):
-        return x
-identity_transform = IdentityTransform()
 
 class DreamBoothDataset(Dataset):
     """
@@ -452,7 +455,6 @@ class DreamBoothDataset(Dataset):
         size=1024,
         center_crop=False,
         lr_flip_p = 0.0,
-        color_jitter = False,
     ):
         self.size = size
         self.center_crop = center_crop
@@ -477,16 +479,19 @@ class DreamBoothDataset(Dataset):
         else:
             self.class_data_root = None
 
-        self.image_transforms = transforms.Compose(
-            [
-                transforms.Resize(size, interpolation=transforms.InterpolationMode.BILINEAR),
-                transforms.CenterCrop(size) if center_crop else transforms.RandomCrop(size),
-                transforms.ColorJitter(0.1, 0.1) if color_jitter else identity_transform,
-                transforms.RandomHorizontalFlip(p=lr_flip_p) if lr_flip_p > 0.0 else identity_transform,
-                transforms.ToTensor(),
-                transforms.Normalize([0.5], [0.5]),
-            ]
-        )
+        transform_list = [
+            transforms.Resize(size, interpolation=transforms.InterpolationMode.BILINEAR),
+            transforms.CenterCrop(size) if center_crop else transforms.RandomCrop(size),
+            #transforms.ColorJitter(0.1, 0.1) if color_jitter else None,
+            transforms.RandomHorizontalFlip(p=lr_flip_p) if lr_flip_p > 0.0 else None,
+            transforms.ToTensor(),
+            transforms.Normalize([0.5], [0.5]),
+        ]
+
+        # Filter out None elements
+        transform_list = [t for t in transform_list if t is not None]
+
+        self.image_transforms = transforms.Compose(transform_list)
         
     def __len__(self):
         return self._length
@@ -599,6 +604,12 @@ def unet_attn_processors_state_dict(unet) -> Dict[str, torch.tensor]:
 
     return attn_processors_state_dict
 
+class CustomCollate:
+    def __init__(self, with_prior_preservation):
+        self.with_prior_preservation = with_prior_preservation
+
+    def __call__(self, examples):
+        return collate_fn(examples, self.with_prior_preservation)
 
 def main(args):
     logging_dir = Path(args.output_dir, args.logging_dir)
@@ -741,12 +752,11 @@ def main(args):
         weight_dtype = torch.bfloat16
 
     # Move unet, vae and text_encoder to device and cast to weight_dtype
-    # The VAE is in float32 to avoid NaN losses.
     unet.to(accelerator.device, dtype=weight_dtype)
-    if args.pretrained_vae_model_name_or_path is None:
-        vae.to(accelerator.device, dtype=torch.float32)
-    else:
-        vae.to(accelerator.device, dtype=weight_dtype)
+
+    # The VAE is always in float32 to avoid NaN losses.
+    vae.to(accelerator.device, dtype=torch.float32)
+
     text_encoder_one.to(accelerator.device, dtype=weight_dtype)
     text_encoder_two.to(accelerator.device, dtype=weight_dtype)
 
@@ -973,16 +983,18 @@ def main(args):
         instance_data_root=args.instance_data_dir,
         class_data_root=args.class_data_dir if args.with_prior_preservation else None,
         class_num=args.num_class_images,
-        lr_flip_p = args.lr_flip_p,
         size=args.resolution,
         center_crop=args.center_crop,
+        lr_flip_p=args.lr_flip_p,
     )
+
+    collator = CustomCollate(args.with_prior_preservation)
 
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=args.train_batch_size,
         shuffle=True,
-        collate_fn=lambda examples: collate_fn(examples, args.with_prior_preservation),
+        collate_fn=collator,
         num_workers=args.dataloader_num_workers,
         drop_last=True,
     )
@@ -1039,6 +1051,9 @@ def main(args):
     global_step = 0
     first_epoch = 0
 
+    def get_second_element(text):
+        return int(text.split("-")[1])
+
     # Potentially load in the weights and states from a previous save
     if args.resume_from_checkpoint:
         if args.resume_from_checkpoint != "latest":
@@ -1047,7 +1062,7 @@ def main(args):
             # Get the mos recent checkpoint
             dirs = os.listdir(args.output_dir)
             dirs = [d for d in dirs if d.startswith("checkpoint")]
-            dirs = sorted(dirs, key=lambda x: int(x.split("-")[1]))
+            dirs = sorted(dirs, key=get_second_element)
             path = dirs[-1] if len(dirs) > 0 else None
 
         if path is None:
@@ -1081,10 +1096,7 @@ def main(args):
                 continue
 
             with accelerator.accumulate(unet):
-                if args.pretrained_vae_model_name_or_path is None:
-                    pixel_values = batch["pixel_values"]
-                else:
-                    pixel_values = batch["pixel_values"].to(dtype=weight_dtype)
+                pixel_values = batch["pixel_values"].to(dtype=vae.dtype)
 
                 # Convert images to latent space
                 model_input = vae.encode(pixel_values).latent_dist.sample()
@@ -1114,13 +1126,11 @@ def main(args):
                         "time_ids": add_time_ids.repeat(elems_to_repeat, 1),
                         "text_embeds": unet_add_text_embeds.repeat(elems_to_repeat, 1),
                     }
-                    if prompt_embeds.shape[0] < elems_to_repeat:
-                        prompt_embeds = prompt_embeds.repeat(elems_to_repeat, 1, 1)
-                        
+                    prompt_embeds_input = prompt_embeds.repeat(elems_to_repeat, 1, 1)
                     model_pred = unet(
                         noisy_model_input,
                         timesteps,
-                        prompt_embeds,
+                        prompt_embeds_input,
                         added_cond_kwargs=unet_added_conditions,
                     ).sample
                 else:
@@ -1132,9 +1142,9 @@ def main(args):
                         text_input_ids_list=[tokens_one, tokens_two],
                     )
                     unet_added_conditions.update({"text_embeds": pooled_prompt_embeds.repeat(elems_to_repeat, 1)})
-                    prompt_embeds = prompt_embeds.repeat(elems_to_repeat, 1, 1)
+                    prompt_embeds_input = prompt_embeds.repeat(elems_to_repeat, 1, 1)
                     model_pred = unet(
-                        noisy_model_input, timesteps, prompt_embeds, added_cond_kwargs=unet_added_conditions
+                        noisy_model_input, timesteps, prompt_embeds_input, added_cond_kwargs=unet_added_conditions
                     ).sample
 
                 # Get the target for loss depending on the prediction type
@@ -1184,7 +1194,7 @@ def main(args):
                         if args.checkpoints_total_limit is not None:
                             checkpoints = os.listdir(args.output_dir)
                             checkpoints = [d for d in checkpoints if d.startswith("checkpoint")]
-                            checkpoints = sorted(checkpoints, key=lambda x: int(x.split("-")[1]))
+                            checkpoints = sorted(checkpoints, key=get_second_element)
 
                             # before we save the new checkpoint, we need to have at _most_ `checkpoints_total_limit - 1` checkpoints
                             if len(checkpoints) >= args.checkpoints_total_limit:
@@ -1277,10 +1287,6 @@ def main(args):
                             }
                         )
 
-                    # also save the sample imgs to args.output_dir:
-                    for i, image in enumerate(images):
-                        image.save(os.path.join(args.output_dir, f"validation_{global_step:04d}_{i}.png"))
-
                 del pipeline
                 torch.cuda.empty_cache()
 
@@ -1332,14 +1338,13 @@ def main(args):
 
         pipeline.scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config, **scheduler_args)
 
-        pipeline = pipeline.to(accelerator.device)
-
         # load attention processors
         pipeline.load_lora_weights(args.output_dir)
 
         # run inference
         images = []
         if args.validation_prompt and args.num_validation_images > 0:
+            pipeline = pipeline.to(accelerator.device)
             generator = torch.Generator(device=accelerator.device).manual_seed(args.seed) if args.seed else None
             images = [
                 pipeline(args.validation_prompt, num_inference_steps=25, generator=generator).images[0]

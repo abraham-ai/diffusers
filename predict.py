@@ -8,6 +8,7 @@ from typing import Iterator, Optional
 from dotenv import load_dotenv
 
 from examples.dreambooth.train_dreambooth_lora_sdxl_eden import parse_args, main as train_lora
+#from examples.dreambooth.train_dreambooth_lora_sdxl import parse_args, main as train_lora
 
 load_dotenv()
 
@@ -98,7 +99,7 @@ class Predictor(BasePredictor):
             description="Resolution",
             default=960
         ),
-        lr_flip_prob: float = Input(
+        lr_flip_p: float = Input(
             description="LR flip prob",
             default=0.5
         ),
@@ -173,7 +174,7 @@ class Predictor(BasePredictor):
 
         args.rank = lora_rank
         args.resolution = resolution
-        args.lr_flip_prob = lr_flip_prob
+        args.lr_flip_p = lr_flip_p
         args.learning_rate = learning_rate
         args.train_batch_size = train_batch_size
         args.gradient_accumulation_steps = gradient_accumulation_steps
@@ -216,7 +217,3 @@ class Predictor(BasePredictor):
         lora_location = os.path.join(str(out_dir), checkpoint_dir, f'pytorch_lora_weights.bin')
     
         yield CogOutput(file=Path(lora_location), name=name, thumbnail=None, attributes=None, isFinal=True, progress=1.0)
-
-
-if __name__ == "__main__":
-    Predictor().run()
