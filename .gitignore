@@ -2,6 +2,7 @@
 lora
 vae_fixed
 .huggingface/
+test_train_imgs
 
 # Initially taken from Github's Python gitignore file
 

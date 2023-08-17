@@ -36,4 +36,4 @@ build:
 
 predict: "predict.py:Predictor"
 
-image: "r8.im/abraham-ai/diffusers-lora-trainer"
+image: "r8.im/abraham-ai/sdxl-lora-trainer"

@@ -4,8 +4,10 @@ import argparse
 import tempfile
 import requests
 from typing import Iterator, Optional
-
 from dotenv import load_dotenv
+
+DEBUG_MODE = False
+#DEBUG_MODE = True
 
 from examples.dreambooth.train_dreambooth_lora_sdxl_eden import parse_args, main as train_lora
 #from examples.dreambooth.train_dreambooth_lora_sdxl import parse_args, main as train_lora
@@ -29,9 +31,9 @@ checkpoint_options = {
 }
 
 class CogOutput(BaseModel):
-    file: Path
+    files: list[Path]
     name: Optional[str] = None
-    thumbnail: Optional[Path] = None
+    thumbnails: Optional[Path] = None
     attributes: Optional[dict] = None
     progress: Optional[float] = None
     isFinal: bool = False
@@ -72,6 +74,8 @@ def namespace_to_args(namespace):
 
 class Predictor(BasePredictor):
 
+    GENERATOR_OUTPUT_TYPE = Path if DEBUG_MODE else CogOutput
+
     def setup(self):
         print("cog:setup")
 
@@ -100,7 +104,7 @@ class Predictor(BasePredictor):
             default=960
         ),
         lr_flip_p: float = Input(
-            description="LR flip prob",
+            description="Left-right flipping probability for data augmentation",
             default=0.5
         ),
         train_batch_size: int = Input(
@@ -113,18 +117,18 @@ class Predictor(BasePredictor):
         ),
         learning_rate: float = Input(
             description="Learning rate for U-Net",
-            default=2.5e-4
+            default=3e-4
         ),
         max_train_steps: int = Input(
             description="Max train steps for tuning (U-Net and text encoder)",
-            default=500
+            default=400
         ),
         lora_rank: int = Input(
             description="LORA rank",
             default=4
         ),
 
-    ) -> Iterator[CogOutput]:
+    ) -> Iterator[GENERATOR_OUTPUT_TYPE]:
 
         print("cog:predict:train_lora")
 
@@ -186,6 +190,7 @@ class Predictor(BasePredictor):
         args.lr_warmup_steps = 50
 
         args.checkpointing_steps = args.max_train_steps
+        args.num_validation_images = 0
         args.checkpoints_total_limit = 1
         args.seed = 0
         args.report_to = "tensorboard"
@@ -212,8 +217,19 @@ class Predictor(BasePredictor):
         print(args)
 
         train_lora(args)
+        
+        checkpoint_dir = sorted([f for f in os.listdir(args.output_dir) if 'checkpoint' in f])[-1]
+        lora_location = os.path.join(args.output_dir, checkpoint_dir, 'pytorch_lora_weights.bin')
 
-        checkpoint_dir = sorted(os.path.listdir(out_dir))[-1]
-        lora_location = os.path.join(str(out_dir), checkpoint_dir, f'pytorch_lora_weights.bin')
-    
-        yield CogOutput(file=Path(lora_location), name=name, thumbnail=None, attributes=None, isFinal=True, progress=1.0)
+        attributes = {
+            "instance_prompt": instance_prompt,
+        }
+
+        print("LORA trainig done, returning cog output")
+        print("lora_location: ", lora_location)
+        print("Trigger prompt: ", instance_prompt)
+        
+        if DEBUG_MODE:
+            yield Path(lora_location)
+        else:
+            yield CogOutput(files=[Path(lora_location)], name=name, thumbnails=None, attributes=attributes, isFinal=True, progress=1.0)
