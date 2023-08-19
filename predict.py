@@ -1,5 +1,6 @@
 import os
 import sys
+import shutil
 import argparse
 import tempfile
 import requests
@@ -228,8 +229,32 @@ class Predictor(BasePredictor):
         print("LORA trainig done, returning cog output")
         print("lora_location: ", lora_location)
         print("Trigger prompt: ", instance_prompt)
+
+        # save all the args into a dict:
+        args_dict = {}
+        for key, value in vars(args).items():
+            args_dict[key] = str(value)
+
+        # add the trigger prompt:
+        args_dict['instance_prompt'] = instance_prompt
+
+        # save the args dict as a json file:
+        import json
+        with open(os.path.join(out_dir, 'args.json'), 'w') as f:
+            json.dump(args_dict, f)
+
+        # remove all the subfolders in out_dir that start with checkpoint-:
+        for f in os.listdir(out_dir):
+            if f.startswith('checkpoint-'):
+                shutil.rmtree(os.path.join(out_dir, f))
+
+        # Zip the output folder:
+        shutil.make_archive(os.path.join(os.getcwd(), "lora"), 'zip', out_dir)
+        return_filepath = os.path.join(os.getcwd(), "lora.zip")
+
+        print(f"Saved LORA weights and settings to {return_filepath}")
         
         if DEBUG_MODE:
-            yield Path(lora_location)
+            yield Path(return_filepath)
         else:
-            yield CogOutput(files=[Path(lora_location)], name=name, thumbnails=None, attributes=attributes, isFinal=True, progress=1.0)
+            yield CogOutput(files=[Path(return_filepath)], name=name, thumbnails=None, attributes=attributes, isFinal=True, progress=1.0)
