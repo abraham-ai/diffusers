@@ -258,11 +258,11 @@ class Predictor(BasePredictor):
 if __name__ == "__main__":
 
     if 1:
-        instance_data_dir = "/data/xander/Projects/cog/lora/exps/training_imgs/hetty/sub2/imgs"
-        output_dir = "lora/trained_models/sdxl-lora-hetty_all_plzwork_sub2"
+        instance_data_dir = "/data/xander/Projects/cog/xander_eden_stuff/loras/training_sets/banny_single"
+        output_dir = "lora/lora_compare_diffusers/banny_single"
 
-        instance_prompt   = 'a photo of Cate Blanchett'
-        validation_prompt = 'a photo of Cate Blanchett as the commander of the starfleet enterprise'
+        instance_prompt   = 'a photo of bananaman'
+        validation_prompt = 'a photo of bananaman'
 
         class_data_dir = output_dir + "_class_imgs"
         class_prompt = "a photo of a woman"
@@ -311,7 +311,7 @@ if __name__ == "__main__":
     --learning_rate=1.0e-4 \
     --lr_scheduler='constant' \
     --lr_warmup_steps=0 \
-    --max_train_steps=1000 \
+    --max_train_steps=200 \
     --checkpointing_steps=200 \
     --checkpoints_total_limit=4 \
     --dataloader_num_workers=4 \
