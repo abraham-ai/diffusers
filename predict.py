@@ -89,7 +89,7 @@ class Predictor(BasePredictor):
             default="sdxl-v1.0"
         ),
         lora_training_urls: str = Input(
-            description="Training images for new LORA concept", 
+            description="Training images for new LORA concept (can be images or a .zip file of images)", 
             default=None
         ),
         instance_prompt: str = Input(
@@ -143,11 +143,8 @@ class Predictor(BasePredictor):
 
         data_dir.mkdir(exist_ok=True)
         out_dir.mkdir(exist_ok=True)
-        
-        lora_training_urls = lora_training_urls.split('|')
-        for lora_url in lora_training_urls:
-            print("download", lora_url)
-            download(lora_url, data_dir, '.jpg')
+
+        download_training_data(lora_training_urls, data_dir)
 
         """
         load_and_save_masks_and_captions(

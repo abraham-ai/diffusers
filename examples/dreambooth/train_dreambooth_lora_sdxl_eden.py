@@ -996,7 +996,7 @@ def main(args):
         shuffle=True,
         collate_fn=collator,
         num_workers=args.dataloader_num_workers,
-        drop_last=True,
+        drop_last=True if (len(train_dataset) > args.train_batch_size) else False,
     )
 
     # Scheduler and math around the number of training steps.
@@ -1027,6 +1027,7 @@ def main(args):
 
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
+    
     if overrode_max_train_steps:
         args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
     # Afterwards we recalculate our number of training epochs
@@ -1038,6 +1039,7 @@ def main(args):
         accelerator.init_trackers("dreambooth-lora-sd-xl", config=vars(args))
 
     # Train!
+    args.train_batch_size = min(args.train_batch_size, len(train_dataset))
     total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
 
     logger.info("***** Running training *****")
