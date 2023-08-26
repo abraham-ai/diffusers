@@ -6,6 +6,7 @@ import tempfile
 import requests
 from typing import Iterator, Optional
 from dotenv import load_dotenv
+from io_utils import download_and_prep_training_data
 
 DEBUG_MODE = False
 #DEBUG_MODE = True
@@ -144,7 +145,7 @@ class Predictor(BasePredictor):
         data_dir.mkdir(exist_ok=True)
         out_dir.mkdir(exist_ok=True)
 
-        download_training_data(lora_training_urls, data_dir)
+        download_and_prep_training_data(lora_training_urls, data_dir)
 
         """
         load_and_save_masks_and_captions(

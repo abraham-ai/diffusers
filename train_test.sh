@@ -1,1 +1,1 @@
-cog predict -i lora_training_urls="https://storage.googleapis.com/public-assets-xander/Random/remove/banny/0.src.jpg" -i instance_prompt="a cartoon of Banny" -i name="Banny" -i max_train_steps=6
+cog predict -i lora_training_urls="https://storage.googleapis.com/public-assets-xander/Random/remove/test.zip|https://generations.krea.ai/images/3cd0b8a8-34e5-4647-9217-1dc03a886b6a.webp" -i instance_prompt="a cartoon of Banny" -i name="Banny" -i max_train_steps=6
