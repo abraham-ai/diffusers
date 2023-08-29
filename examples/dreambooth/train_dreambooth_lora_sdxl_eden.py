@@ -1225,7 +1225,7 @@ def main(args):
                 break
 
         if accelerator.is_main_process:
-            if args.validation_prompt is not None and epoch % args.validation_epochs == 0:
+            if (args.validation_prompt is not None) and ((epoch % args.validation_epochs == 0) or (global_step >= args.max_train_steps)):
                 logger.info(
                     f"Running validation... \n Generating {args.num_validation_images} images with prompt:"
                     f" {args.validation_prompt}."
@@ -1247,7 +1247,6 @@ def main(args):
                     revision=args.revision,
                     torch_dtype=weight_dtype,
                 )
-                noise_scheduler =  EulerDiscreteScheduler.from_config(pipeline.scheduler.config)
 
                 # We train on the simplified learning objective. If we were previously predicting a variance, we need the scheduler to ignore it
                 scheduler_args = {}
@@ -1259,7 +1258,8 @@ def main(args):
                         variance_type = "fixed_small"
 
                     scheduler_args["variance_type"] = variance_type
-
+                
+                #pipeline.scheduler =  EulerDiscreteScheduler.from_config(pipeline.scheduler.config)
                 pipeline.scheduler = DPMSolverMultistepScheduler.from_config(
                     pipeline.scheduler.config, **scheduler_args
                 )
@@ -1272,8 +1272,8 @@ def main(args):
                 pipeline_args = {
                     "prompt": args.validation_prompt,
                     "negative_prompt": "nude, naked, poorly drawn face, ugly, tiling, out of frame, extra limbs, disfigured, deformed body, blurry, blurred, watermark, text, grainy, signature, cut off, draft", 
-                    "num_inference_steps": 40,
-                    "guidance_scale": 8,
+                    "num_inference_steps": 35,
+                    "guidance_scale": 7,
                     }
 
                 with torch.cuda.amp.autocast():

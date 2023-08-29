@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from PIL import Image
 
 DEBUG_MODE = False
-#DEBUG_MODE = True
+DEBUG_MODE = True
 
 from io_utils import make_validation_img_grid, download_and_prep_training_data
 
@@ -143,14 +143,13 @@ class Predictor(BasePredictor):
         data_dir = Path(tempfile.mkdtemp())
         out_dir  = Path(tempfile.mkdtemp())
 
-        # Local test to see images:
-        out_dir = Path("test_lora_out2")
-        os.makedirs(out_dir, exist_ok=True)
+        if DEBUG_MODE: # Create persistent paths for debugging:
+            out_dir  = Path("test_lora/output_dir")
+            data_dir = Path("test_lora/data_dir")
 
-        print("train lora", str(data_dir), str(out_dir))
-
-        data_dir.mkdir(exist_ok=True)
-        out_dir.mkdir(exist_ok=True)
+        data_dir.mkdir(parents=True, exist_ok=True)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        print(f"Train lora, data_dir: {str(data_dir)}, out_dir: {str(out_dir)}")
 
         download_and_prep_training_data(lora_training_urls, data_dir)
 
@@ -193,7 +192,7 @@ class Predictor(BasePredictor):
         args.max_train_steps = max_train_steps
         #args.train_text_encoder = True  #False by default if not provided
         args.lr_scheduler = "constant_with_warmup"
-        args.lr_warmup_steps = 25
+        args.lr_warmup_steps = 50
 
         args.checkpointing_steps = args.max_train_steps
         args.num_validation_images = 4
