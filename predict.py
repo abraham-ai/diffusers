@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from PIL import Image
 
 DEBUG_MODE = False
-DEBUG_MODE = True
+#DEBUG_MODE = True
 
 from io_utils import make_validation_img_grid, download_and_prep_training_data
 
