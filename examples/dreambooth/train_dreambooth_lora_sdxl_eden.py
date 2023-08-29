@@ -46,6 +46,7 @@ import diffusers
 from diffusers import (
     AutoencoderKL,
     DDPMScheduler,
+    EulerDiscreteScheduler,
     DPMSolverMultistepScheduler,
     StableDiffusionXLPipeline,
     UNet2DConditionModel,
@@ -1246,6 +1247,7 @@ def main(args):
                     revision=args.revision,
                     torch_dtype=weight_dtype,
                 )
+                noise_scheduler =  EulerDiscreteScheduler.from_config(pipeline.scheduler.config)
 
                 # We train on the simplified learning objective. If we were previously predicting a variance, we need the scheduler to ignore it
                 scheduler_args = {}
@@ -1267,7 +1269,12 @@ def main(args):
 
                 # run inference
                 generator = torch.Generator(device=accelerator.device).manual_seed(args.seed) if args.seed else None
-                pipeline_args = {"prompt": args.validation_prompt}
+                pipeline_args = {
+                    "prompt": args.validation_prompt,
+                    "negative_prompt": "nude, naked, poorly drawn face, ugly, tiling, out of frame, extra limbs, disfigured, deformed body, blurry, blurred, watermark, text, grainy, signature, cut off, draft", 
+                    "num_inference_steps": 40,
+                    "guidance_scale": 8,
+                    }
 
                 with torch.cuda.amp.autocast():
                     images = [
@@ -1288,6 +1295,10 @@ def main(args):
                                 ]
                             }
                         )
+
+                # Also save these images to the output directory:
+                for i, image in enumerate(images):
+                    image.save(os.path.join(args.output_dir, f"validation_{i}.jpg"))
 
                 del pipeline
                 torch.cuda.empty_cache()

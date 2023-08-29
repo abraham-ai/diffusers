@@ -6,10 +6,12 @@ import tempfile
 import requests
 from typing import Iterator, Optional
 from dotenv import load_dotenv
-from io_utils import download_and_prep_training_data
+from PIL import Image
 
 DEBUG_MODE = False
 #DEBUG_MODE = True
+
+from io_utils import make_validation_img_grid, download_and_prep_training_data
 
 from examples.dreambooth.train_dreambooth_lora_sdxl_eden import parse_args, main as train_lora
 #from examples.dreambooth.train_dreambooth_lora_sdxl import parse_args, main as train_lora
@@ -26,6 +28,7 @@ FIXED_VAE_PATH = "/src/vae_fixed"
 #from preprocess_files import load_and_save_masks_and_captions
 #from cli_lora_pti import train
 
+
 from cog import BasePredictor, BaseModel, File, Input, Path
 
 checkpoint_options = {
@@ -35,7 +38,7 @@ checkpoint_options = {
 class CogOutput(BaseModel):
     files: list[Path]
     name: Optional[str] = None
-    thumbnails: Optional[Path] = None
+    thumbnails: Optional[list[Path]] = []
     attributes: Optional[dict] = None
     progress: Optional[float] = None
     isFinal: bool = False
@@ -140,6 +143,10 @@ class Predictor(BasePredictor):
         data_dir = Path(tempfile.mkdtemp())
         out_dir  = Path(tempfile.mkdtemp())
 
+        # Local test to see images:
+        out_dir = Path("test_lora_out2")
+        os.makedirs(out_dir, exist_ok=True)
+
         print("train lora", str(data_dir), str(out_dir))
 
         data_dir.mkdir(exist_ok=True)
@@ -186,10 +193,12 @@ class Predictor(BasePredictor):
         args.max_train_steps = max_train_steps
         #args.train_text_encoder = True  #False by default if not provided
         args.lr_scheduler = "constant_with_warmup"
-        args.lr_warmup_steps = 50
+        args.lr_warmup_steps = 25
 
         args.checkpointing_steps = args.max_train_steps
-        args.num_validation_images = 0
+        args.num_validation_images = 4
+        args.validation_prompt = instance_prompt
+        args.validation_epochs = 1000
         args.checkpoints_total_limit = 1
         args.seed = 0
         args.report_to = "tensorboard"
@@ -251,8 +260,12 @@ class Predictor(BasePredictor):
         return_filepath = os.path.join(os.getcwd(), "lora.zip")
 
         print(f"Saved LORA weights and settings to {return_filepath}")
+
+        validation_grid_img_path = make_validation_img_grid(out_dir)
         
         if DEBUG_MODE:
             yield Path(return_filepath)
         else:
-            yield CogOutput(files=[Path(return_filepath)], name=name, thumbnails=None, attributes=attributes, isFinal=True, progress=1.0)
+            yield CogOutput(files=[Path(return_filepath)], name=name, thumbnails=[Path(validation_grid_img_path)], attributes=attributes, isFinal=True, progress=1.0)
+
+

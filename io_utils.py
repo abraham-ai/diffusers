@@ -7,6 +7,44 @@ import mimetypes
 from PIL import Image
 import signal
 import time
+import numpy as np
+
+def make_validation_img_grid(img_folder):
+    """
+
+    find all the validation imgs in img_folder (template = validation_*.jpg)
+    if >=4 validation imgs, create a 2x2 grid of them
+    otherwise just return the first validation img
+
+    """
+    
+    # Find all validation images
+    validation_imgs = [f for f in os.listdir(img_folder) if f.startswith("validation_") and f.endswith(".jpg")]
+    validation_imgs.sort()
+
+    if len(validation_imgs) < 4:
+        # If less than 4 validation images, return path of the first one
+        return os.path.join(img_folder, validation_imgs[0])
+    else:
+        # If >= 4 validation images, create 2x2 grid
+        imgs = [Image.open(os.path.join(img_folder, img)) for img in validation_imgs[:4]]
+
+        # Assuming all images are the same size, get dimensions of first image
+        width, height = imgs[0].size
+
+        # Create an empty image with 2x2 grid size
+        grid_img = Image.new("RGB", (2 * width, 2 * height))
+
+        # Paste the images into the grid
+        for i in range(2):
+            for j in range(2):
+                grid_img.paste(imgs.pop(0), (i * width, j * height))
+
+        # Save the new image
+        grid_img_path = os.path.join(img_folder, "validation_grid.jpg")
+        grid_img.save(grid_img_path)
+
+        return grid_img_path
 
 def run_and_kill_cmd(command, pipe_output=True):
     p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
