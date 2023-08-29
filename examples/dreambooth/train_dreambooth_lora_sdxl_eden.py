@@ -1258,7 +1258,7 @@ def main(args):
                         variance_type = "fixed_small"
 
                     scheduler_args["variance_type"] = variance_type
-                
+                -
                 #pipeline.scheduler =  EulerDiscreteScheduler.from_config(pipeline.scheduler.config)
                 pipeline.scheduler = DPMSolverMultistepScheduler.from_config(
                     pipeline.scheduler.config, **scheduler_args
