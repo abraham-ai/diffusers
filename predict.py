@@ -122,8 +122,8 @@ class Predictor(BasePredictor):
             default=2
         ),
         learning_rate: float = Input(
-            description="Learning rate for U-Net",
-            default=3e-5
+            description="Learning rate",
+            default=5e-5
         ),
         max_train_steps: int = Input(
             description="Max train steps for tuning (U-Net and text encoder)",

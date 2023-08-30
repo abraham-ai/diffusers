@@ -1,1 +1,1 @@
-cog predict -i lora_training_urls="https://storage.googleapis.com/public-assets-xander/A_workbox/banny_small.zip" -i instance_prompt="a cartoon of bananaman" -i name="Banny" -i max_train_steps=300
+cog predict -i lora_training_urls="https://storage.googleapis.com/public-assets-xander/A_workbox/banny_small.zip" -i instance_prompt="a cartoon of bananaman" -i name="Banny" -i max_train_steps=250
