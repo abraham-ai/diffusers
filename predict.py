@@ -1,6 +1,7 @@
 import os
 import sys
 import shutil
+import json
 import argparse
 import tempfile
 import requests
@@ -110,7 +111,7 @@ class Predictor(BasePredictor):
         ),
         lr_flip_p: float = Input(
             description="Left-right flipping probability for data augmentation",
-            default=0.5
+            default=0.2
         ),
         train_batch_size: int = Input(
             description="Batch size",
@@ -122,15 +123,15 @@ class Predictor(BasePredictor):
         ),
         learning_rate: float = Input(
             description="Learning rate for U-Net",
-            default=3e-4
+            default=3e-5
         ),
         max_train_steps: int = Input(
             description="Max train steps for tuning (U-Net and text encoder)",
-            default=400
+            default=250
         ),
         lora_rank: int = Input(
             description="LORA rank",
-            default=4
+            default=5
         ),
 
     ) -> Iterator[GENERATOR_OUTPUT_TYPE]:
@@ -143,9 +144,12 @@ class Predictor(BasePredictor):
         data_dir = Path(tempfile.mkdtemp())
         out_dir  = Path(tempfile.mkdtemp())
 
+        validation_prompt = instance_prompt
+
         if DEBUG_MODE: # Create persistent paths for debugging:
             out_dir  = Path("test_lora/output_dir")
             data_dir = Path("test_lora/data_dir")
+            validation_prompt = "a photo of bananaman climbing mount Everest, setting sun, high quality professional photography, nikon d850 50mm"
 
         data_dir.mkdir(parents=True, exist_ok=True)
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -196,8 +200,11 @@ class Predictor(BasePredictor):
 
         args.checkpointing_steps = args.max_train_steps
         args.num_validation_images = 4
-        args.validation_prompt = instance_prompt
-        args.validation_epochs = 1000
+        args.validation_prompt = validation_prompt
+        if DEBUG_MODE:
+            args.validation_epochs = 50
+        else:
+            args.validation_epochs = 10000 # dont save intermediate validation imgs
         args.checkpoints_total_limit = 1
         args.seed = 0
         args.report_to = "tensorboard"
@@ -210,10 +217,7 @@ class Predictor(BasePredictor):
         args.prior_loss_weight = 1.0
         args.num_class_images = 0
 
-        print(args)
-
         # irrelevant, hardcoded args:
-        print("Parsing remaining args...")
         manual_args_list = []
         for key, value in vars(args).items():
             manual_args_list.append(f'--{key}')
@@ -222,6 +226,10 @@ class Predictor(BasePredictor):
 
         print("Training LORA with args:")
         print(args)
+
+        # save args.json to output dir:
+        with open(os.path.join(out_dir, 'args.json'), 'w') as f:
+            json.dump(vars(args), f, indent=2)
 
         train_lora(args)
         
@@ -245,9 +253,8 @@ class Predictor(BasePredictor):
         args_dict['instance_prompt'] = instance_prompt
 
         # save the args dict as a json file:
-        import json
         with open(os.path.join(out_dir, 'args.json'), 'w') as f:
-            json.dump(args_dict, f)
+            json.dump(args_dict, f, indent=2)
 
         # remove all the subfolders in out_dir that start with checkpoint-:
         for f in os.listdir(out_dir):

@@ -258,23 +258,14 @@ class Predictor(BasePredictor):
 if __name__ == "__main__":
 
     if 1:
-        instance_data_dir = "/data/xander/Projects/cog/xander_eden_stuff/loras/training_sets/banny_single"
-        output_dir = "lora/lora_compare_diffusers/banny_single"
+        instance_data_dir = "/data/xander/Projects/cog/diffusers/test_lora/data_dir"
+        output_dir = "lora/trained_models/banny_good_sdxl_trainer"
 
-        instance_prompt   = 'a photo of bananaman'
-        validation_prompt = 'a photo of bananaman'
+        instance_prompt   = 'a cartoon of sks bananaman'
+        validation_prompt = 'a cartoon of sks bananaman'
 
         class_data_dir = output_dir + "_class_imgs"
         class_prompt = "a photo of a woman"
-    else:
-        instance_data_dir = "/data/xander/Projects/cog/xander_eden_stuff/xander/assets/chinaman/set2"
-        output_dir = "lora/trained_models/sdxl-lora-chinaman"
-
-        instance_prompt   = 'a wedding photo of bride and groom'
-        validation_prompt = 'a fantastic photo of bride and groom in front of the piramids of Gizeh'
-
-        class_data_dir = output_dir + "_class_imgs"
-        class_prompt = "a closeup photo of a woman"
 
     #############
 
@@ -305,13 +296,13 @@ if __name__ == "__main__":
     --num_class_images=50 \
     --prior_loss_weight=0.75 \
     --resolution=960 \
-    --train_batch_size=2 \
+    --train_batch_size=1 \
     --sample_batch_size=2 \
-    --gradient_accumulation_steps=2 \
-    --learning_rate=1.0e-4 \
+    --gradient_accumulation_steps=4 \
+    --learning_rate=1.0e-5 \
     --lr_scheduler='constant' \
     --lr_warmup_steps=0 \
-    --max_train_steps=200 \
+    --max_train_steps=500 \
     --checkpointing_steps=200 \
     --checkpoints_total_limit=4 \
     --dataloader_num_workers=4 \

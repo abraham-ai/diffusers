@@ -1265,7 +1265,7 @@ def main(args):
                 )
 
                 pipeline = pipeline.to(accelerator.device)
-                pipeline.set_progress_bar_config(disable=True)
+                #pipeline.set_progress_bar_config(disable=True)
 
                 # run inference
                 generator = torch.Generator(device=accelerator.device).manual_seed(args.seed) if args.seed else None
@@ -1298,7 +1298,7 @@ def main(args):
 
                 # Also save these images to the output directory:
                 for i, image in enumerate(images):
-                    image.save(os.path.join(args.output_dir, f"validation_{i}.jpg"))
+                    image.save(os.path.join(args.output_dir, f"validation_{epoch:04}_{i}.jpg"))
 
                 del pipeline
                 torch.cuda.empty_cache()
@@ -1360,7 +1360,7 @@ def main(args):
             pipeline = pipeline.to(accelerator.device)
             generator = torch.Generator(device=accelerator.device).manual_seed(args.seed) if args.seed else None
             images = [
-                pipeline(args.validation_prompt, num_inference_steps=25, generator=generator).images[0]
+                pipeline(args.validation_prompt, num_inference_steps=35, generator=generator).images[0]
                 for _ in range(args.num_validation_images)
             ]
 
@@ -1377,6 +1377,10 @@ def main(args):
                             ]
                         }
                     )
+            
+            # Also save these images to the output directory:
+            for i, image in enumerate(images):
+                image.save(os.path.join(args.output_dir, f"validation_{epoch:04}_{i}.jpg"))
 
         if args.push_to_hub:
             save_model_card(
