@@ -30,12 +30,14 @@ from requests.exceptions import HTTPError
 from diffusers.models import UNet2DConditionModel
 from diffusers.models.attention_processor import AttnProcessor, AttnProcessor2_0, XFormersAttnProcessor
 from diffusers.training_utils import EMAModel
-from diffusers.utils import logging, torch_device
+from diffusers.utils import logging
 from diffusers.utils.testing_utils import (
     CaptureLogger,
+    require_python39_or_higher,
     require_torch_2,
     require_torch_gpu,
     run_test_in_subprocess,
+    torch_device,
 )
 
 from ..others.test_utils import TOKEN, USER, is_staging_test
@@ -52,7 +54,7 @@ def _test_from_save_pretrained_dynamo(in_queue, out_queue, timeout):
         model = torch.compile(model)
 
         with tempfile.TemporaryDirectory() as tmpdirname:
-            model.save_pretrained(tmpdirname)
+            model.save_pretrained(tmpdirname, safe_serialization=False)
             new_model = model_class.from_pretrained(tmpdirname)
             new_model.to(torch_device)
 
@@ -195,7 +197,7 @@ class ModelTesterMixin:
     main_input_name = None  # overwrite in model specific tester class
     base_precision = 1e-3
 
-    def test_from_save_pretrained(self):
+    def test_from_save_pretrained(self, expected_max_diff=5e-5):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
 
         model = self.model_class(**init_dict)
@@ -205,7 +207,7 @@ class ModelTesterMixin:
         model.eval()
 
         with tempfile.TemporaryDirectory() as tmpdirname:
-            model.save_pretrained(tmpdirname)
+            model.save_pretrained(tmpdirname, safe_serialization=False)
             new_model = self.model_class.from_pretrained(tmpdirname)
             if hasattr(new_model, "set_default_attn_processor"):
                 new_model.set_default_attn_processor()
@@ -221,8 +223,8 @@ class ModelTesterMixin:
             if isinstance(new_image, dict):
                 new_image = new_image.to_tuple()[0]
 
-        max_diff = (image - new_image).abs().sum().item()
-        self.assertLessEqual(max_diff, 5e-5, "Models give different forward passes")
+        max_diff = (image - new_image).abs().max().item()
+        self.assertLessEqual(max_diff, expected_max_diff, "Models give different forward passes")
 
     def test_getattr_is_correct(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
@@ -316,7 +318,7 @@ class ModelTesterMixin:
         assert torch.allclose(output_2, output_5, atol=self.base_precision)
         assert torch.allclose(output_2, output_6, atol=self.base_precision)
 
-    def test_from_save_pretrained_variant(self):
+    def test_from_save_pretrained_variant(self, expected_max_diff=5e-5):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
 
         model = self.model_class(**init_dict)
@@ -327,7 +329,7 @@ class ModelTesterMixin:
         model.eval()
 
         with tempfile.TemporaryDirectory() as tmpdirname:
-            model.save_pretrained(tmpdirname, variant="fp16")
+            model.save_pretrained(tmpdirname, variant="fp16", safe_serialization=False)
             new_model = self.model_class.from_pretrained(tmpdirname, variant="fp16")
             if hasattr(new_model, "set_default_attn_processor"):
                 new_model.set_default_attn_processor()
@@ -351,9 +353,10 @@ class ModelTesterMixin:
             if isinstance(new_image, dict):
                 new_image = new_image.to_tuple()[0]
 
-        max_diff = (image - new_image).abs().sum().item()
-        self.assertLessEqual(max_diff, 5e-5, "Models give different forward passes")
+        max_diff = (image - new_image).abs().max().item()
+        self.assertLessEqual(max_diff, expected_max_diff, "Models give different forward passes")
 
+    @require_python39_or_higher
     @require_torch_2
     def test_from_save_pretrained_dynamo(self):
         init_dict, _ = self.prepare_init_args_and_inputs_for_common()
@@ -372,7 +375,7 @@ class ModelTesterMixin:
                 continue
             with tempfile.TemporaryDirectory() as tmpdirname:
                 model.to(dtype)
-                model.save_pretrained(tmpdirname)
+                model.save_pretrained(tmpdirname, safe_serialization=False)
                 new_model = self.model_class.from_pretrained(tmpdirname, low_cpu_mem_usage=True, torch_dtype=dtype)
                 assert new_model.dtype == dtype
                 new_model = self.model_class.from_pretrained(tmpdirname, low_cpu_mem_usage=False, torch_dtype=dtype)
@@ -429,7 +432,7 @@ class ModelTesterMixin:
         # test if the model can be loaded from the config
         # and has all the expected shape
         with tempfile.TemporaryDirectory() as tmpdirname:
-            model.save_pretrained(tmpdirname)
+            model.save_pretrained(tmpdirname, safe_serialization=False)
             new_model = self.model_class.from_pretrained(tmpdirname)
             new_model.to(torch_device)
             new_model.eval()
