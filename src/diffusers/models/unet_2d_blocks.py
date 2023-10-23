@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -466,6 +466,21 @@ def get_up_block(
 
 
 class AutoencoderTinyBlock(nn.Module):
+    """
+    Tiny Autoencoder block used in [`AutoencoderTiny`]. It is a mini residual module consisting of plain conv + ReLU
+    blocks.
+
+    Args:
+        in_channels (`int`): The number of input channels.
+        out_channels (`int`): The number of output channels.
+        act_fn (`str`):
+            ` The activation function to use. Supported values are `"swish"`, `"mish"`, `"gelu"`, and `"relu"`.
+
+    Returns:
+        `torch.FloatTensor`: A tensor with the same shape as the input tensor, but with the number of channels equal to
+        `out_channels`.
+    """
+
     def __init__(self, in_channels: int, out_channels: int, act_fn: str):
         super().__init__()
         act_fn = get_activation(act_fn)
@@ -488,6 +503,36 @@ class AutoencoderTinyBlock(nn.Module):
 
 
 class UNetMidBlock2D(nn.Module):
+    """
+    A 2D UNet mid-block [`UNetMidBlock2D`] with multiple residual blocks and optional attention blocks.
+
+    Args:
+        in_channels (`int`): The number of input channels.
+        temb_channels (`int`): The number of temporal embedding channels.
+        dropout (`float`, *optional*, defaults to 0.0): The dropout rate.
+        num_layers (`int`, *optional*, defaults to 1): The number of residual blocks.
+        resnet_eps (`float`, *optional*, 1e-6 ): The epsilon value for the resnet blocks.
+        resnet_time_scale_shift (`str`, *optional*, defaults to `default`):
+            The type of normalization to apply to the time embeddings. This can help to improve the performance of the
+            model on tasks with long-range temporal dependencies.
+        resnet_act_fn (`str`, *optional*, defaults to `swish`): The activation function for the resnet blocks.
+        resnet_groups (`int`, *optional*, defaults to 32):
+            The number of groups to use in the group normalization layers of the resnet blocks.
+        attn_groups (`Optional[int]`, *optional*, defaults to None): The number of groups for the attention blocks.
+        resnet_pre_norm (`bool`, *optional*, defaults to `True`):
+            Whether to use pre-normalization for the resnet blocks.
+        add_attention (`bool`, *optional*, defaults to `True`): Whether to add attention blocks.
+        attention_head_dim (`int`, *optional*, defaults to 1):
+            Dimension of a single attention head. The number of attention heads is determined based on this value and
+            the number of input channels.
+        output_scale_factor (`float`, *optional*, defaults to 1.0): The output scale factor.
+
+    Returns:
+        `torch.FloatTensor`: The output of the last residual block, which is a tensor of shape `(batch_size,
+        in_channels, height, width)`.
+
+    """
+
     def __init__(
         self,
         in_channels: int,
@@ -589,7 +634,7 @@ class UNetMidBlock2DCrossAttn(nn.Module):
         temb_channels: int,
         dropout: float = 0.0,
         num_layers: int = 1,
-        transformer_layers_per_block: int = 1,
+        transformer_layers_per_block: Union[int, Tuple[int]] = 1,
         resnet_eps: float = 1e-6,
         resnet_time_scale_shift: str = "default",
         resnet_act_fn: str = "swish",
@@ -609,6 +654,10 @@ class UNetMidBlock2DCrossAttn(nn.Module):
         self.num_attention_heads = num_attention_heads
         resnet_groups = resnet_groups if resnet_groups is not None else min(in_channels // 4, 32)
 
+        # support for variable transformer layers per block
+        if isinstance(transformer_layers_per_block, int):
+            transformer_layers_per_block = [transformer_layers_per_block] * num_layers
+
         # there is always at least one resnet
         resnets = [
             ResnetBlock2D(
@@ -626,14 +675,14 @@ class UNetMidBlock2DCrossAttn(nn.Module):
         ]
         attentions = []
 
-        for _ in range(num_layers):
+        for i in range(num_layers):
             if not dual_cross_attention:
                 attentions.append(
                     Transformer2DModel(
                         num_attention_heads,
                         in_channels // num_attention_heads,
                         in_channels=in_channels,
-                        num_layers=transformer_layers_per_block,
+                        num_layers=transformer_layers_per_block[i],
                         cross_attention_dim=cross_attention_dim,
                         norm_num_groups=resnet_groups,
                         use_linear_projection=use_linear_projection,
@@ -973,7 +1022,7 @@ class CrossAttnDownBlock2D(nn.Module):
         temb_channels: int,
         dropout: float = 0.0,
         num_layers: int = 1,
-        transformer_layers_per_block: int = 1,
+        transformer_layers_per_block: Union[int, Tuple[int]] = 1,
         resnet_eps: float = 1e-6,
         resnet_time_scale_shift: str = "default",
         resnet_act_fn: str = "swish",
@@ -996,6 +1045,8 @@ class CrossAttnDownBlock2D(nn.Module):
 
         self.has_cross_attention = True
         self.num_attention_heads = num_attention_heads
+        if isinstance(transformer_layers_per_block, int):
+            transformer_layers_per_block = [transformer_layers_per_block] * num_layers
 
         for i in range(num_layers):
             in_channels = in_channels if i == 0 else out_channels
@@ -1019,7 +1070,7 @@ class CrossAttnDownBlock2D(nn.Module):
                         num_attention_heads,
                         out_channels // num_attention_heads,
                         in_channels=out_channels,
-                        num_layers=transformer_layers_per_block,
+                        num_layers=transformer_layers_per_block[i],
                         cross_attention_dim=cross_attention_dim,
                         norm_num_groups=resnet_groups,
                         use_linear_projection=use_linear_projection,
@@ -2122,7 +2173,7 @@ class CrossAttnUpBlock2D(nn.Module):
         resolution_idx: int = None,
         dropout: float = 0.0,
         num_layers: int = 1,
-        transformer_layers_per_block: int = 1,
+        transformer_layers_per_block: Union[int, Tuple[int]] = 1,
         resnet_eps: float = 1e-6,
         resnet_time_scale_shift: str = "default",
         resnet_act_fn: str = "swish",
@@ -2144,6 +2195,9 @@ class CrossAttnUpBlock2D(nn.Module):
 
         self.has_cross_attention = True
         self.num_attention_heads = num_attention_heads
+
+        if isinstance(transformer_layers_per_block, int):
+            transformer_layers_per_block = [transformer_layers_per_block] * num_layers
 
         for i in range(num_layers):
             res_skip_channels = in_channels if (i == num_layers - 1) else out_channels
@@ -2169,7 +2223,7 @@ class CrossAttnUpBlock2D(nn.Module):
                         num_attention_heads,
                         out_channels // num_attention_heads,
                         in_channels=out_channels,
-                        num_layers=transformer_layers_per_block,
+                        num_layers=transformer_layers_per_block[i],
                         cross_attention_dim=cross_attention_dim,
                         norm_num_groups=resnet_groups,
                         use_linear_projection=use_linear_projection,
